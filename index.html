@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+<title>AR Video Scanner</title>
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+    "mindar-image-three": "https://cdn.jsdelivr.net/npm/mind-ar@1.2.5/dist/mindar-image-three.prod.js"
+  }
+}
+</script>
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  html, body { width:100%; height:100%; overflow:hidden; background:#000; }
+
+  #ar-container {
+    position:fixed; inset:0; width:100%; height:100%; overflow:hidden;
+    /* small overscan so the camera feed always fully covers the screen */
+    transform: scale(1.2); transform-origin: center center;
+  }
+  #ar-container > div, #ar-container video, #ar-container canvas {
+    position:absolute !important; inset:0 !important;
+    width:100% !important; height:100% !important;
+    object-fit:cover !important;
+  }
+
+  #start-btn {
+    position:fixed; inset:0; z-index:10; margin:auto; width:220px; height:56px;
+    border:none; border-radius:999px; background:#f5c842; color:#111;
+    font:700 16px -apple-system, sans-serif; cursor:pointer;
+  }
+  #start-btn.hidden { display:none; }
+</style>
+</head>
+<body>
+
+  <div id="ar-container"></div>
+  <button id="start-btn">Start Scanning</button>
+
+  <script type="module">
+    import * as THREE from "three";
+    import { MindARThree } from "mindar-image-three";
+
+    // Target billboard's real aspect ratio (height / width). Measured from
+    // the banner image (1657 × 949 px). Update this if you use a different image.
+    const TARGET_ASPECT = 949 / 1657;
+
+    // If the video plays sideways, set this to 90, 180, or 270.
+    const VIDEO_ROTATION_DEG = 0;
+
+    document.getElementById('start-btn').addEventListener('click', async () => {
+      document.getElementById('start-btn').classList.add('hidden');
+
+      const mindarThree = new MindARThree({
+        container: document.querySelector("#ar-container"),
+        imageTargetSrc: './targets.mind',
+      });
+      const { renderer, scene, camera } = mindarThree;
+      const anchor = mindarThree.addAnchor(0);
+
+      const video = document.createElement('video');
+      video.src = './video.mp4';
+      video.crossOrigin = 'anonymous';
+      video.loop = true;
+      video.muted = true; // required for autoplay
+      video.playsInline = true;
+      video.setAttribute('webkit-playsinline', 'true');
+
+      const videoTexture = new THREE.VideoTexture(video);
+      videoTexture.colorSpace = THREE.SRGBColorSpace;
+      videoTexture.center.set(0.5, 0.5);
+      videoTexture.rotation = VIDEO_ROTATION_DEG * Math.PI / 180;
+
+      const geometry = new THREE.PlaneGeometry(1, TARGET_ASPECT);
+      const material = new THREE.MeshBasicMaterial({ map: videoTexture, toneMapped: false });
+      const plane = new THREE.Mesh(geometry, material);
+      anchor.group.add(plane);
+
+      // Crop the video to fill the billboard exactly, no stretching/gaps.
+      function fitVideoCover() {
+        const rotated90 = Math.abs(VIDEO_ROTATION_DEG % 180) === 90;
+        const w = video.videoWidth || 16, h = video.videoHeight || 9;
+        const dispAspect = (rotated90 ? h : w) / (rotated90 ? w : h);
+        const planeAspect = 1 / TARGET_ASPECT;
+        let cropW = 1, cropH = 1;
+        if (dispAspect > planeAspect) cropW = planeAspect / dispAspect;
+        else cropH = dispAspect / planeAspect;
+        const rawCropW = rotated90 ? cropH : cropW;
+        const rawCropH = rotated90 ? cropW : cropH;
+        videoTexture.repeat.set(rawCropW, rawCropH);
+        videoTexture.offset.set((1 - rawCropW) / 2, (1 - rawCropH) / 2);
+      }
+      video.addEventListener('loadedmetadata', fitVideoCover);
+
+      anchor.onTargetFound = () => { video.currentTime = 0; video.play(); };
+      anchor.onTargetLost  = () => { video.pause(); };
+
+      await mindarThree.start();
+      renderer.setAnimationLoop(() => renderer.render(scene, camera));
+    });
+  </script>
+</body>
+</html>
