@@ -22,7 +22,7 @@
     background:#000; color:#fff;
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   }
- 
+ 
   /* AR container fills the whole screen. MindAR injects its own wrapper div
      plus a <video> (camera feed) and <canvas> (three.js) into this — every
      level needs forcing full-bleed, not just video/canvas, or a letterboxed
@@ -39,65 +39,62 @@
     max-width:none !important; max-height:none !important;
     object-fit:cover !important;
   }
- 
+ 
   #start-screen {
     position:fixed; inset:0; z-index:50;
-    display:flex; flex-direction:column; align-items:center; justify-content:center;
-    gap:22px; background:radial-gradient(ellipse at 50% 40%, #14141c 0%, #000 75%);
-    text-align:center; padding:24px;
+    display:flex; align-items:flex-start; justify-content:center;
+    padding-top:70px;
+    pointer-events:none;
+    background:transparent;
     transition:opacity .4s ease, visibility .4s ease;
   }
-  #start-screen.hidden { opacity:0; visibility:hidden; pointer-events:none; }
- 
-  .title { font-size:clamp(24px,7vw,34px); font-weight:700; letter-spacing:.02em; }
-  .subtitle { font-size:14px; color:rgba(255,255,255,.55); max-width:320px; line-height:1.5; }
- 
-  #start-btn {
-    margin-top:10px; padding:16px 40px; border:none; border-radius:999px;
-    background:#f5c842; color:#111; font-size:16px; font-weight:700;
-    letter-spacing:.04em; cursor:pointer;
+
+  #start-screen.hidden {
+    opacity:0;
+    visibility:hidden;
   }
-  #start-btn:active { transform:scale(.96); }
-  #start-btn:disabled { opacity:.5; }
- 
-  .spinner {
-    width:34px; height:34px; border-radius:50%;
-    border:3px solid rgba(255,255,255,.15); border-top-color:#f5c842;
-    animation:spin 1s linear infinite; display:none;
+
+  .focus-text {
+    padding:10px 18px;
+    border-radius:20px;
+    background:rgba(0,0,0,.55);
+    color:#fff;
+    font-size:15px;
+    text-align:center;
+    backdrop-filter:blur(6px);
+    -webkit-backdrop-filter:blur(6px);
   }
-  #start-screen.loading .spinner { display:block; }
-  #start-screen.loading #start-btn { display:none; }
-  @keyframes spin { to { transform:rotate(360deg); } }
- 
+
   #debug-status { font-size:12px; color:rgba(255,255,255,.4); min-height:16px; }
   #error-msg { color:#ff6b6b; font-size:13px; max-width:320px; display:none; white-space:pre-wrap; }
 </style>
 </head>
 <body>
- 
-  <div id="ar-container"></div>
- 
-  <div id="start-screen">
-    <div class="title">AR Video Scanner</div>
-    <div class="subtitle">Point your camera at the billboard image to watch the video play exactly over it, life-size.</div>
-    <button id="start-btn">Start Scanning</button>
-    <div class="spinner"></div>
-    <div id="debug-status"></div>
-    <div id="error-msg"></div>
-  </div>
- 
-  <script>
+ 
+<div id="ar-container"></div>
+ 
+<div id="start-screen">
+  <div class="focus-text">Point your camera at the poster</div>
+  <div id="debug-status" style="display:none;"></div>
+  <div id="error-msg"></div>
+</div>
+<div class="subtitle">Point your camera at the billboard image to watch the video play exactly over it, life-size.</div>
+<button id="start-btn">Start Scanning</button>
+<div class="spinner"></div>
+<div id="debug-status"></div>
+<div id="error-msg"></div>
+</div>
+ 
+<script>
     // Catches failures that happen BEFORE the module script's own try/catch
     // can run — a blocked/broken CDN import, or opening via file:// — which
     // otherwise makes the Start button silently do nothing.
     (function () {
       function showFatal(msg) {
         var s = document.getElementById('start-screen');
-        var btn = document.getElementById('start-btn');
         var err = document.getElementById('error-msg');
         s.classList.remove('loading');
         s.classList.remove('hidden');
-        if (btn) btn.disabled = false;
         err.style.display = 'block';
         err.textContent = msg;
       }
@@ -116,22 +113,21 @@
         }
       }, true); // capture phase — resource load errors don't bubble
     })();
-  </script>
- 
-  <script type="module">
+</script>
+ 
+<script type="module">
     import * as THREE from "three";
     import { MindARThree } from "mindar-image-three";
- 
+ 
     const startScreen = document.getElementById('start-screen');
-    const startBtn     = document.getElementById('start-btn');
     const errorMsg     = document.getElementById('error-msg');
     const debugEl      = document.getElementById('debug-status');
- 
+ 
     function log(step) {
       console.log('[AR]', step);
       if (debugEl) debugEl.textContent = step;
     }
- 
+ 
     function friendlyCameraError(err) {
       const name = err && err.name;
       if (name === 'NotAllowedError' || name === 'PermissionDeniedError')
@@ -146,34 +142,31 @@
         return 'Camera blocked: this page must be served over HTTPS (or localhost).';
       return (name || 'Error') + ': ' + (err && err.message ? err.message : err);
     }
- 
+ 
     // Target billboard's real aspect ratio (height / width). Measured from
     // the banner image (1657 × 949 px). Update this if you use a different image.
     const TARGET_ASPECT = 949 / 1657;
- 
+ 
     // If the video plays sideways, set this to 90, 180, or 270.
     const VIDEO_ROTATION_DEG = 0;
- 
+ 
     async function startExperience() {
-      startBtn.disabled = true;
-      startScreen.classList.add('loading');
       errorMsg.style.display = 'none';
- 
+ 
       let watchdogStep = '';
       const watchdog = setTimeout(() => {
         errorMsg.style.display = 'block';
         errorMsg.textContent = 'Timed out while: "' + watchdogStep + '". Check the browser console (F12) for the real error.';
         startScreen.classList.remove('loading');
-        startBtn.disabled = false;
       }, 15000);
       const step = (s) => { watchdogStep = s; log(s); };
- 
+ 
       try {
         step('checking targets.mind is reachable…');
         const targetsRes = await fetch('./targets.mind', { method: 'HEAD' })
           .catch((e) => { throw new Error('targets.mind fetch failed: ' + e.message); });
         if (!targetsRes.ok) throw new Error('targets.mind returned HTTP ' + targetsRes.status);
- 
+ 
         step('requesting camera permission…');
         let preflightStream;
         try {
@@ -185,7 +178,7 @@
           throw new Error(friendlyCameraError(permErr));
         }
         preflightStream.getTracks().forEach((t) => t.stop());
- 
+ 
         step('starting AR engine…');
         const mindarThree = new MindARThree({
           container: document.querySelector("#ar-container"),
@@ -199,9 +192,9 @@
         });
         const { renderer, scene, camera } = mindarThree;
         renderer.setPixelRatio(window.devicePixelRatio);
- 
+ 
         const anchor = mindarThree.addAnchor(0);
- 
+ 
         const video = document.createElement('video');
         video.src = './video.mp4';
         video.crossOrigin = 'anonymous';
@@ -213,12 +206,12 @@
         video.addEventListener('error', () => {
           log('warning: video.mp4 failed to load (code ' + (video.error ? video.error.code : '?') + ')');
         });
- 
+ 
         const videoTexture = new THREE.VideoTexture(video);
         videoTexture.colorSpace = THREE.SRGBColorSpace;
         videoTexture.center.set(0.5, 0.5);
         videoTexture.rotation = VIDEO_ROTATION_DEG * Math.PI / 180;
- 
+ 
         // Exact-overlay plane: sits flush on the marker, sized to match the
         // billboard exactly — this is the "video plays in the billboard's
         // own size" look, not a floating card.
@@ -229,32 +222,46 @@
         const plane = new THREE.Mesh(geometry, material);
         plane.position.set(0, 0, 0.01); // just in front of the marker, avoids z-fighting
         anchor.group.add(plane);
-        // 🔊 Tap the AR video to enable sound
-const raycaster = new THREE.Raycaster();
-const pointer = new THREE.Vector2();
 
-renderer.domElement.addEventListener('click', (event) => {
-  if (!visible) return;
+        // 🔊 Mobile/iPhone-friendly audio unlock.
+        // Do not raycast the AR canvas: on mobile the camera/canvas transform
+        // can make canvas coordinates differ from the actual touch position.
+        // A direct touch/click while the poster is detected is a user gesture,
+        // so we can safely unmute and resume the video immediately.
+        let soundEnabled = false;
 
-  const rect = renderer.domElement.getBoundingClientRect();
+        function enableVideoSound(event) {
+          if (!visible || soundEnabled) return;
 
-  pointer.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
-  pointer.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+          // Prevent the browser from treating this as a second navigation/tap.
+          if (event) event.preventDefault();
 
-  raycaster.setFromCamera(pointer, camera);
+          video.muted = false;
+          video.volume = 1.0;
 
-  const intersects = raycaster.intersectObject(plane, true);
+          const playPromise = video.play();
 
-  if (intersects.length > 0) {
-    video.muted = false;
-    video.volume = 1.0;
+          if (playPromise !== undefined) {
+            playPromise.then(() => {
+              soundEnabled = true;
+              log('Sound ON');
+            }).catch((err) => {
+              console.error('Audio unlock failed:', err);
+              log('Tap the video again to enable sound');
+            });
+          }
+        }
 
-    video.play().catch(err => {
-      console.log("Audio play failed:", err);
-    });
-  }
-});
- 
+        // pointerup works on iPhone, Android and desktop.
+        renderer.domElement.addEventListener('pointerup', enableVideoSound, {
+          passive: false
+        });
+
+        // Extra iOS fallback.
+        renderer.domElement.addEventListener('touchend', enableVideoSound, {
+          passive: false
+        });
+ 
         // Crop the video to fill the billboard exactly (like object-fit:
         // cover) instead of stretching or leaving letterbox gaps.
         function fitVideoCover() {
@@ -272,44 +279,48 @@ renderer.domElement.addEventListener('click', (event) => {
         }
         fitVideoCover();
         video.addEventListener('loadedmetadata', fitVideoCover);
- 
+ 
         let visible = false;
         anchor.onTargetFound = () => {
           visible = true;
+          soundEnabled = false;
+          startScreen.classList.add('hidden');
           video.currentTime = 0;
           video.play().catch((e) => console.error('video.play() failed:', e));
         };
         anchor.onTargetLost = () => {
           visible = false;
+          startScreen.classList.remove('hidden');
           video.pause();
         };
- 
+ 
         step('opening camera feed…');
         await mindarThree.start();
- 
+ 
         clearTimeout(watchdog);
         step('');
- 
+ 
         renderer.setAnimationLoop(() => {
           const target = visible ? 1 : 0;
           material.opacity += (target - material.opacity) * 0.15;
           renderer.render(scene, camera);
         });
- 
+ 
         startScreen.classList.add('hidden');
- 
+ 
       } catch (err) {
         clearTimeout(watchdog);
         console.error(err);
         startScreen.classList.remove('loading');
-        startBtn.disabled = false;
         errorMsg.style.display = 'block';
         errorMsg.textContent = err && err.message ? err.message : String(err);
       }
     }
- 
-    startBtn.addEventListener('click', startExperience);
-  </script>
+ 
+    // Start camera automatically when the page opens.
+    window.addEventListener('load', () => {
+      startExperience();
+    });
+</script>
 </body>
 </html>
- 
