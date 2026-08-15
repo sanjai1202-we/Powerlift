@@ -192,8 +192,8 @@
           imageTargetSrc: './targets.mind',
           uiScanning: false,
           uiLoading: false,
-          filterMinCF: 0.0001,
-          filterBeta: 20,
+          filterMinCF: 0.00005,
+          filterBeta: 5,
           warmupTolerance: 5,
           // Much more forgiving before declaring the target "lost" — a
           // shaky hand causes brief tracking drop-outs, and every one of
@@ -255,13 +255,16 @@
         let smoothingInitialized = false;
  
         // Below these thresholds = treated as jitter -> heavy smoothing.
-        // Above = treated as real movement -> snap fast.
-        const JITTER_POS = 0.015;   // marker-space units
-        const JITTER_ANGLE = 0.04;  // radians (~2.3°)
-        const JITTER_SCALE = 0.02;  // fraction of current scale
+        // Above = treated as real movement -> snap fast. Widened these:
+        // ordinary hand-shake was exceeding the old (tighter) thresholds
+        // and getting treated as "real movement", which made it snap to
+        // noise instead of smoothing it out — the opposite of what we want.
+        const JITTER_POS = 0.05;    // marker-space units
+        const JITTER_ANGLE = 0.10;  // radians (~5.7°)
+        const JITTER_SCALE = 0.06;  // fraction of current scale
  
-        const SLOW_FACTOR = 0.15; // smoothing for jitter (steadiness)
-        const FAST_FACTOR = 0.75; // smoothing for real movement (responsiveness)
+        const SLOW_FACTOR = 0.08; // smoothing for jitter (steadiness) — stronger now
+        const FAST_FACTOR = 0.6;  // smoothing for real movement (responsiveness)
  
         function updateStableGroup() {
           if (!visible) return;
