@@ -47,6 +47,30 @@
   <button id="start-btn">Start Scanning</button>
   <div id="err"></div>
  
+  <script>
+    // Catches failures that happen before the module script's own try/catch
+    // can run — e.g. a blocked or broken CDN import. Without this, that kind
+    // of failure makes the Start button silently do nothing.
+    function showErr(msg) {
+      var e = document.getElementById('err');
+      e.style.display = 'block';
+      e.textContent = 'Failed to load: ' + msg;
+      var btn = document.getElementById('start-btn');
+      if (btn) btn.classList.remove('hidden');
+    }
+    window.addEventListener('error', function (ev) {
+      if (ev && ev.message) showErr(ev.message);
+    });
+    window.addEventListener('unhandledrejection', function (ev) {
+      showErr(ev.reason && ev.reason.message ? ev.reason.message : String(ev.reason));
+    });
+    document.addEventListener('error', function (ev) {
+      if (ev.target && ev.target.tagName === 'SCRIPT') {
+        showErr('could not load ' + (ev.target.src || ev.target.type || 'a script') + ' — check your internet connection or that the CDN isn\'t blocked.');
+      }
+    }, true); // capture phase — resource load errors don't bubble
+  </script>
+ 
   <script type="module">
     import * as THREE from "three";
     import { MindARThree } from "mindar-image-three";
