@@ -265,15 +265,30 @@
  
     setStatus("loading MindAR…");
  
-    let MindARModule;
+    // jsdelivr is blocked on some ISPs/networks/ad-blockers, so try
+    // unpkg first (same CDN that successfully served three.js above),
+    // then fall back to jsdelivr if unpkg itself is unavailable.
+    const mindArUrls = [
+      "https://unpkg.com/mind-ar@1.2.5/dist/mindar-image-three.prod.js",
+      "https://cdn.jsdelivr.net/npm/mind-ar@1.2.5/dist/mindar-image-three.prod.js"
+    ];
  
-    try {
-      MindARModule = await import(
-        "https://cdn.jsdelivr.net/npm/mind-ar@1.2.5/dist/mindar-image-three.prod.js?v=125"
-      );
-    } catch (error) {
+    let MindARModule;
+    let lastError;
+ 
+    for (const url of mindArUrls) {
+      try {
+        MindARModule = await import(url + "?v=125");
+        break;
+      } catch (error) {
+        lastError = error;
+        setStatus("MindAR failed from " + new URL(url).hostname + ", trying next source…");
+      }
+    }
+ 
+    if (!MindARModule) {
       throw new Error(
-        "Could not load MindAR from the CDN. Check your internet connection and reload."
+        "Could not load MindAR from any CDN (unpkg or jsdelivr). This is likely a network/ISP/ad-blocker block. Try a different network (e.g. mobile data instead of WiFi) or disable ad-blocking extensions."
       );
     }
  
