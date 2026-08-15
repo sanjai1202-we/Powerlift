@@ -33,11 +33,37 @@
     /* small overscan: pushes any leftover letterbox margin off-screen */
     transform: scale(1.2); transform-origin: center center;
   }
-  #ar-container > div, #ar-container video, #ar-container canvas {
-    position:absolute !important; inset:0 !important;
-    width:100% !important; height:100% !important;
-    max-width:none !important; max-height:none !important;
+  #ar-container > div {
+    position:absolute !important;
+    inset:0 !important;
+    width:100% !important;
+    height:100% !important;
+  }
+
+  /* Real camera preview */
+  #ar-container video {
+    position:absolute !important;
+    inset:0 !important;
+    width:100% !important;
+    height:100% !important;
+    max-width:none !important;
+    max-height:none !important;
     object-fit:cover !important;
+    z-index:0 !important;
+    display:block !important;
+  }
+
+  /* AR graphics must sit on top of the camera, but stay transparent */
+  #ar-container canvas {
+    position:absolute !important;
+    inset:0 !important;
+    width:100% !important;
+    height:100% !important;
+    max-width:none !important;
+    max-height:none !important;
+    z-index:1 !important;
+    display:block !important;
+    background:transparent !important;
   }
 
   #audio-btn {
@@ -233,6 +259,9 @@
           missTolerance: 5,
         });
         const { renderer, scene, camera } = mindarThree;
+
+        // Keep the AR canvas transparent so the live camera remains clearly visible.
+        renderer.setClearColor(0x000000, 0);
         renderer.setPixelRatio(window.devicePixelRatio);
  
         const anchor = mindarThree.addAnchor(0);
