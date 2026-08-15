@@ -100,6 +100,14 @@
   }
 
   #error-msg {
+    position:fixed;
+    left:50%;
+    bottom:80px;
+    transform:translateX(-50%);
+    z-index:200;
+    padding:8px 12px;
+    border-radius:12px;
+    background:rgba(0,0,0,.75);
     color:#ff6b6b;
     font-size:13px;
     max-width:320px;
@@ -119,6 +127,9 @@
 <div id="start-screen">
   <div class="focus-text">Focus the camera on the image</div>
 </div>
+
+<div id="debug-status" style="display:none;"></div>
+<div id="error-msg" style="display:none;"></div>
 
 <script>
     // Catches failures that happen BEFORE the module script's own try/catch
@@ -198,11 +209,6 @@
       const step = (s) => { watchdogStep = s; log(s); };
  
       try {
-        step('checking targets.mind is reachable…');
-        const targetsRes = await fetch('./targets.mind', { method: 'HEAD' })
-          .catch((e) => { throw new Error('targets.mind fetch failed: ' + e.message); });
-        if (!targetsRes.ok) throw new Error('targets.mind returned HTTP ' + targetsRes.status);
- 
         step('requesting camera permission…');
         let preflightStream;
         try {
@@ -345,10 +351,12 @@
       }
     }
  
-    // Start camera automatically when the page opens.
-    window.addEventListener('load', () => {
+    // Start camera automatically when the page is ready.
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', startExperience, { once: true });
+    } else {
       startExperience();
-    });
+    }
 </script>
 </body>
 </html>
