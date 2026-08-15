@@ -150,6 +150,24 @@
   #error-message.show {
     display: block;
   }
+ 
+  /* Always-visible step-by-step status, for debugging only.
+     Delete this block plus #debug-status below once things work. */
+  #debug-status {
+    position: fixed;
+    left: 8px;
+    top: 8px;
+    z-index: 50;
+    max-width: calc(100% - 16px);
+    padding: 6px 10px;
+    border-radius: 8px;
+    background: rgba(0, 0, 0, 0.7);
+    color: #7CFC7C;
+    font-size: 11px;
+    font-family: monospace;
+    white-space: pre-wrap;
+    pointer-events: none;
+  }
 </style>
 </head>
  
@@ -163,10 +181,20 @@
  
 <div id="error-message"></div>
  
+<div id="debug-status">starting…</div>
+ 
 <script type="module">
   const focusMessage = document.getElementById("focus-message");
   const audioBtn = document.getElementById("audio-btn");
   const errorMessage = document.getElementById("error-message");
+  const debugStatus = document.getElementById("debug-status");
+ 
+  function setStatus(message) {
+    console.log("[AR]", message);
+    if (debugStatus) debugStatus.textContent = message;
+  }
+ 
+  setStatus("script loaded, waiting for DOM…");
  
   const TARGET_ASPECT = 949 / 1657;
   const VIDEO_ROTATION_DEG = 0;
@@ -221,6 +249,8 @@
   let MindARThree;
  
   async function loadLibraries() {
+    setStatus("loading three.js…");
+ 
     // Dynamic imports so a CDN/network failure surfaces as a visible
     // error message instead of silently leaving a black screen.
     try {
@@ -232,6 +262,8 @@
         "Could not load three.js from the CDN. Check your internet connection and reload."
       );
     }
+ 
+    setStatus("loading MindAR…");
  
     let MindARModule;
  
@@ -250,11 +282,14 @@
     if (!MindARThree) {
       throw new Error("MindARThree failed to load from the MindAR CDN.");
     }
+ 
+    setStatus("libraries loaded");
   }
  
   async function startAR() {
     try {
       hideError();
+      setStatus("startAR() running…");
  
       if (!MindARThree) {
         await loadLibraries();
@@ -265,6 +300,8 @@
        * Do not manually position MindAR's injected camera video/canvas.
        * MindAR handles the camera presentation and AR canvas together.
        */
+      setStatus("creating MindARThree instance…");
+ 
       const mindarThree = new MindARThree({
         container: document.querySelector("#ar-container"),
         imageTargetSrc: "./targets.mind",
@@ -441,7 +478,31 @@
  
       /* ---------------- IMAGE DETECTION ---------------- */
  
+      /* ---------------- START CAMERA ---------------- */
+ 
+      setStatus("requesting camera permission…");
+ 
+      try {
+        await mindarThree.start();
+      } catch (error) {
+        throw new Error(cameraError(error));
+      }
+ 
+      setStatus("camera started — waiting for target image…");
+ 
+      // Confirms whether MindAR actually inserted a <video>/<canvas>
+      // into the page. If this never appears in the status text,
+      // MindAR itself isn't rendering anything into #ar-container.
+      const arContainer = document.querySelector("#ar-container");
+      const camVideoTag = arContainer.querySelector("video");
+      const camCanvasTag = arContainer.querySelector("canvas");
+      setStatus(
+        "camera live — video tag: " + (camVideoTag ? "yes" : "NO") +
+        ", canvas tag: " + (camCanvasTag ? "yes" : "NO")
+      );
+ 
       anchor.onTargetFound = () => {
+        setStatus("target FOUND — playing video");
         targetVisible = true;
  
         focusMessage.classList.add("hidden");
@@ -458,10 +519,12 @@
             "Muted autoplay failed:",
             error
           );
+          setStatus("video.play() failed: " + error.message);
         });
       };
  
       anchor.onTargetLost = () => {
+        setStatus("target lost — waiting for target image…");
         targetVisible = false;
  
         focusMessage.classList.remove("hidden");
@@ -473,14 +536,6 @@
         soundOn = false;
         audioBtn.textContent = "🔇";
       };
- 
-      /* ---------------- START CAMERA ---------------- */
- 
-      try {
-        await mindarThree.start();
-      } catch (error) {
-        throw new Error(cameraError(error));
-      }
  
       renderer.setAnimationLoop(() => {
         // Video appears fully over the poster as soon as it's
