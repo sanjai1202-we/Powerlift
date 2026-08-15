@@ -39,14 +39,42 @@
     max-width:none !important; max-height:none !important;
     object-fit:cover !important;
   }
+
+  #audio-btn {
+    position:fixed;
+    right:18px;
+    bottom:18px;
+    z-index:100;
+    width:48px;
+    height:48px;
+    border:0;
+    border-radius:50%;
+    background:rgba(0,0,0,.65);
+    color:#fff;
+    font-size:22px;
+    display:none;
+    align-items:center;
+    justify-content:center;
+    cursor:pointer;
+    -webkit-tap-highlight-color:transparent;
+    backdrop-filter:blur(6px);
+    -webkit-backdrop-filter:blur(6px);
+  }
+
+  #audio-btn.show {
+    display:flex;
+  }
+
+  #audio-btn:active {
+    transform:scale(.92);
+  }
  
   #start-screen {
     position:fixed; inset:0; z-index:50;
-    display:flex; align-items:flex-start; justify-content:center;
-    padding-top:70px;
+    display:flex; align-items:flex-end; justify-content:center;
+    padding-bottom:32px;
     pointer-events:none;
     background:transparent;
-    transition:opacity .4s ease, visibility .4s ease;
   }
 
   #start-screen.hidden {
@@ -55,36 +83,37 @@
   }
 
   .focus-text {
-    padding:10px 18px;
-    border-radius:20px;
+    padding:8px 14px;
+    border-radius:18px;
     background:rgba(0,0,0,.55);
     color:#fff;
-    font-size:15px;
+    font-size:13px;
     text-align:center;
     backdrop-filter:blur(6px);
     -webkit-backdrop-filter:blur(6px);
   }
 
-  #debug-status { font-size:12px; color:rgba(255,255,255,.4); min-height:16px; }
-  #error-msg { color:#ff6b6b; font-size:13px; max-width:320px; display:none; white-space:pre-wrap; }
+  #error-msg {
+    color:#ff6b6b;
+    font-size:13px;
+    max-width:320px;
+    display:none;
+    white-space:pre-wrap;
+  }
 </style>
 </head>
 <body>
  
 <div id="ar-container"></div>
+
+<button id="audio-btn" aria-label="Unmute video" type="button">
+  🔇
+</button>
  
 <div id="start-screen">
-  <div class="focus-text">Point your camera at the poster</div>
-  <div id="debug-status" style="display:none;"></div>
-  <div id="error-msg"></div>
+  <div class="focus-text">Focus the camera on the image</div>
 </div>
-<div class="subtitle">Point your camera at the billboard image to watch the video play exactly over it, life-size.</div>
-<button id="start-btn">Start Scanning</button>
-<div class="spinner"></div>
-<div id="debug-status"></div>
-<div id="error-msg"></div>
-</div>
- 
+
 <script>
     // Catches failures that happen BEFORE the module script's own try/catch
     // can run — a blocked/broken CDN import, or opening via file:// — which
@@ -120,8 +149,9 @@
     import { MindARThree } from "mindar-image-three";
  
     const startScreen = document.getElementById('start-screen');
-    const errorMsg     = document.getElementById('error-msg');
-    const debugEl      = document.getElementById('debug-status');
+    const audioBtn    = document.getElementById('audio-btn');
+    const errorMsg    = document.getElementById('error-msg');
+    const debugEl     = document.getElementById('debug-status');
  
     function log(step) {
       console.log('[AR]', step);
@@ -223,46 +253,34 @@
         plane.position.set(0, 0, 0.01); // just in front of the marker, avoids z-fighting
         anchor.group.add(plane);
 
-        // 🔊 Mobile/iPhone-friendly audio unlock.
-        // Do not raycast the AR canvas: on mobile the camera/canvas transform
-        // can make canvas coordinates differ from the actual touch position.
-        // A direct touch/click while the poster is detected is a user gesture,
-        // so we can safely unmute and resume the video immediately.
+        // 🔊 Explicit mute/unmute button.
+        // Video starts muted for browser autoplay compatibility.
         let soundEnabled = false;
 
-        function enableVideoSound(event) {
-          if (!visible || soundEnabled) return;
+        audioBtn.addEventListener('click', async (event) => {
+          event.stopPropagation();
 
-          // Prevent the browser from treating this as a second navigation/tap.
-          if (event) event.preventDefault();
-
-          video.muted = false;
-          video.volume = 1.0;
-
-          const playPromise = video.play();
-
-          if (playPromise !== undefined) {
-            playPromise.then(() => {
+          try {
+            if (video.muted) {
+              video.muted = false;
+              video.volume = 1.0;
+              await video.play();
               soundEnabled = true;
-              log('Sound ON');
-            }).catch((err) => {
-              console.error('Audio unlock failed:', err);
-              log('Tap the video again to enable sound');
-            });
+              audioBtn.textContent = '🔊';
+              audioBtn.setAttribute('aria-label', 'Mute video');
+            } else {
+              video.muted = true;
+              soundEnabled = false;
+              audioBtn.textContent = '🔇';
+              audioBtn.setAttribute('aria-label', 'Unmute video');
+            }
+          } catch (err) {
+            console.error('Audio button failed:', err);
+            video.muted = true;
+            audioBtn.textContent = '🔇';
           }
-        }
-
-        // pointerup works on iPhone, Android and desktop.
-        renderer.domElement.addEventListener('pointerup', enableVideoSound, {
-          passive: false
         });
-
-        // Extra iOS fallback.
-        renderer.domElement.addEventListener('touchend', enableVideoSound, {
-          passive: false
-        });
- 
-        // Crop the video to fill the billboard exactly (like object-fit:
+// Crop the video to fill the billboard exactly (like object-fit:
         // cover) instead of stretching or leaving letterbox gaps.
         function fitVideoCover() {
           const rotated90 = Math.abs(VIDEO_ROTATION_DEG % 180) === 90;
@@ -291,7 +309,11 @@
         anchor.onTargetLost = () => {
           visible = false;
           startScreen.classList.remove('hidden');
+          audioBtn.classList.remove('show');
           video.pause();
+          video.muted = true;
+          soundEnabled = false;
+          audioBtn.textContent = '🔇';
         };
  
         step('opening camera feed…');
