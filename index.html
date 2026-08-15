@@ -226,7 +226,7 @@
        * Do not manually position MindAR's injected camera video/canvas.
        * MindAR handles the camera presentation and AR canvas together.
        */
-      const mindar = new MindARThree({
+      const mindarThree = new MindARThree({
         container: document.querySelector("#ar-container"),
         imageTargetSrc: "./targets.mind",
         uiScanning: false,
@@ -242,7 +242,7 @@
         renderer,
         scene,
         camera
-      } = mindar;
+      } = mindarThree;
 
       renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 
@@ -251,7 +251,7 @@
       renderer.domElement.style.background = "transparent";
       renderer.domElement.style.pointerEvents = "none";
 
-      const anchor = mindar.addAnchor(0);
+      const anchor = mindarThree.addAnchor(0);
 
       /* ---------------- VIDEO ---------------- */
 
@@ -437,7 +437,7 @@
 
       /* ---------------- START CAMERA ---------------- */
 
-      await mindar.start();
+      await mindarThree.start();
 
       renderer.setAnimationLoop(() => {
         const targetOpacity =
