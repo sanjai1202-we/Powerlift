@@ -7,6 +7,22 @@
 <meta name="mobile-web-app-capable" content="yes">
 <title>AR Video</title>
  
+<!--
+  MindAR's ES module build imports "three" using a bare specifier
+  internally (import ... from "three"). Without this import map the
+  browser cannot resolve that bare specifier and the whole module
+  fails to load silently (black screen, no error, nothing in the
+  console UI). This map points "three" at the exact same CDN file
+  our own script uses, so both resolve to one shared instance.
+-->
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://unpkg.com/three@0.160.0/build/three.module.js"
+  }
+}
+</script>
+ 
 <style>
   * {
     margin: 0;
@@ -148,15 +164,6 @@
 <div id="error-message"></div>
  
 <script type="module">
-  import * as THREE from "https://unpkg.com/three@0.160.0/build/three.module.js?v=160";
-  import * as MindARModule from "https://cdn.jsdelivr.net/npm/mind-ar@1.2.5/dist/mindar-image-three.prod.js?v=125";
- 
-  const MindARThree = MindARModule.MindARThree;
- 
-  if (!MindARThree) {
-    throw new Error("MindARThree failed to load from the MindAR CDN.");
-  }
- 
   const focusMessage = document.getElementById("focus-message");
   const audioBtn = document.getElementById("audio-btn");
   const errorMessage = document.getElementById("error-message");
@@ -173,6 +180,19 @@
   function hideError() {
     errorMessage.classList.remove("show");
   }
+ 
+  // Safety net: surface anything that slips past our own try/catch
+  // blocks so the page never fails silently with a plain black screen.
+  window.addEventListener("error", (event) => {
+    showError(event.message || "A script error occurred.");
+  });
+ 
+  window.addEventListener("unhandledrejection", (event) => {
+    const reason = event.reason;
+    showError(
+      reason && reason.message ? reason.message : "A script error occurred."
+    );
+  });
  
   function cameraError(error) {
     const name = error && error.name;
@@ -197,9 +217,48 @@
       (error && error.message ? error.message : String(error));
   }
  
+  let THREE;
+  let MindARThree;
+ 
+  async function loadLibraries() {
+    // Dynamic imports so a CDN/network failure surfaces as a visible
+    // error message instead of silently leaving a black screen.
+    try {
+      THREE = await import(
+        "https://unpkg.com/three@0.160.0/build/three.module.js?v=160"
+      );
+    } catch (error) {
+      throw new Error(
+        "Could not load three.js from the CDN. Check your internet connection and reload."
+      );
+    }
+ 
+    let MindARModule;
+ 
+    try {
+      MindARModule = await import(
+        "https://cdn.jsdelivr.net/npm/mind-ar@1.2.5/dist/mindar-image-three.prod.js?v=125"
+      );
+    } catch (error) {
+      throw new Error(
+        "Could not load MindAR from the CDN. Check your internet connection and reload."
+      );
+    }
+ 
+    MindARThree = MindARModule.MindARThree;
+ 
+    if (!MindARThree) {
+      throw new Error("MindARThree failed to load from the MindAR CDN.");
+    }
+  }
+ 
   async function startAR() {
     try {
       hideError();
+ 
+      if (!MindARThree) {
+        await loadLibraries();
+      }
  
       /*
        * IMPORTANT:
