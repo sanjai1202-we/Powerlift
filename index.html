@@ -6,7 +6,7 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <title>AR Video</title>
-
+ 
 <style>
   * {
     margin: 0;
@@ -14,7 +14,7 @@
     box-sizing: border-box;
     -webkit-tap-highlight-color: transparent;
   }
-
+ 
   html,
   body {
     width: 100%;
@@ -23,7 +23,7 @@
     background: #000;
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
   }
-
+ 
   /* MindAR owns the camera + AR canvas. Do not manually move its children. */
   #ar-container {
     position: fixed;
@@ -33,7 +33,7 @@
     overflow: hidden;
     background: #000;
   }
-
+ 
   /* MindAR creates the camera preview and AR canvas inside this container.
      Keep the camera visible underneath the transparent AR layer. */
   #ar-container > div {
@@ -42,7 +42,7 @@
     width: 100% !important;
     height: 100% !important;
   }
-
+ 
   #ar-container video {
     position: absolute !important;
     inset: 0 !important;
@@ -51,7 +51,7 @@
     object-fit: cover !important;
     z-index: 0 !important;
   }
-
+ 
   #ar-container canvas {
     position: absolute !important;
     inset: 0 !important;
@@ -60,7 +60,7 @@
     z-index: 1 !important;
     background: transparent !important;
   }
-
+ 
   /* Only the small instruction is visible before the poster is found. */
   #focus-message {
     position: fixed;
@@ -80,11 +80,11 @@
     backdrop-filter: blur(6px);
     -webkit-backdrop-filter: blur(6px);
   }
-
+ 
   #focus-message.hidden {
     opacity: 0;
   }
-
+ 
   /* Audio control appears only after the poster is detected. */
   #audio-btn {
     position: fixed;
@@ -106,15 +106,15 @@
     backdrop-filter: blur(6px);
     -webkit-backdrop-filter: blur(6px);
   }
-
+ 
   #audio-btn.show {
     display: flex;
   }
-
+ 
   #audio-btn:active {
     transform: scale(0.92);
   }
-
+ 
   #error-message {
     position: fixed;
     left: 50%;
@@ -130,97 +130,77 @@
     text-align: center;
     display: none;
   }
-
+ 
   #error-message.show {
     display: block;
   }
 </style>
 </head>
-
+ 
 <body>
-
+ 
 <div id="ar-container"></div>
-
+ 
 <div id="focus-message">Focus the camera on the image</div>
-
+ 
 <button id="audio-btn" type="button" aria-label="Unmute video">🔇</button>
-
+ 
 <div id="error-message"></div>
-
+ 
 <script type="module">
   import * as THREE from "https://unpkg.com/three@0.160.0/build/three.module.js?v=160";
   import * as MindARModule from "https://cdn.jsdelivr.net/npm/mind-ar@1.2.5/dist/mindar-image-three.prod.js?v=125";
-
+ 
   const MindARThree = MindARModule.MindARThree;
-
+ 
   if (!MindARThree) {
     throw new Error("MindARThree failed to load from the MindAR CDN.");
   }
-
+ 
   const focusMessage = document.getElementById("focus-message");
   const audioBtn = document.getElementById("audio-btn");
   const errorMessage = document.getElementById("error-message");
-
+ 
   const TARGET_ASPECT = 949 / 1657;
   const VIDEO_ROTATION_DEG = 0;
-
+ 
   function showError(message) {
     console.error("[AR]", message);
     errorMessage.textContent = message;
     errorMessage.classList.add("show");
   }
-
+ 
   function hideError() {
     errorMessage.classList.remove("show");
   }
-
+ 
   function cameraError(error) {
     const name = error && error.name;
-
+ 
     if (name === "NotAllowedError" || name === "PermissionDeniedError") {
       return "Camera permission was denied. Allow camera access for this site and reload.";
     }
-
+ 
     if (name === "NotFoundError" || name === "DevicesNotFoundError") {
       return "No camera was found on this device.";
     }
-
+ 
     if (name === "NotReadableError" || name === "TrackStartError") {
       return "The camera is being used by another app or browser tab.";
     }
-
+ 
     if (name === "SecurityError") {
       return "Camera access requires HTTPS.";
     }
-
+ 
     return (name || "Camera error") + ": " +
       (error && error.message ? error.message : String(error));
   }
-
+ 
   async function startAR() {
     try {
       hideError();
-
-      /*
-       * Ask for camera permission first.
-       * This makes the browser show its normal camera permission dialog,
-       * then MindAR starts and displays its own live camera feed.
-       */
-      let permissionStream;
-
-      try {
-        permissionStream = await navigator.mediaDevices.getUserMedia({
-          video: {
-            facingMode: { ideal: "environment" }
-          },
-          audio: false
-        });
-      } catch (error) {
-        throw new Error(cameraError(error));
-      }
-
-      permissionStream.getTracks().forEach(track => track.stop());
-
+ 
       /*
        * IMPORTANT:
        * Do not manually position MindAR's injected camera video/canvas.
@@ -237,26 +217,26 @@
         warmupTolerance: 3,
         missTolerance: 5
       });
-
+ 
       const {
         renderer,
         scene,
         camera
       } = mindarThree;
-
+ 
       renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-
+ 
       // The AR canvas must be transparent so the real camera stays visible.
       renderer.setClearColor(0x000000, 0);
       renderer.domElement.style.background = "transparent";
       renderer.domElement.style.pointerEvents = "none";
-
+ 
       const anchor = mindarThree.addAnchor(0);
-
+ 
       /* ---------------- VIDEO ---------------- */
-
+ 
       const video = document.createElement("video");
-
+ 
       video.src = "./video.mp4";
       video.crossOrigin = "anonymous";
       video.loop = true;
@@ -265,28 +245,28 @@
       video.setAttribute("playsinline", "");
       video.setAttribute("webkit-playsinline", "");
       video.preload = "auto";
-
+ 
       video.addEventListener("error", () => {
         const code = video.error ? video.error.code : "?";
         showError("video.mp4 could not be loaded (code " + code + ").");
       });
-
+ 
       /* ---------------- VIDEO TEXTURE ---------------- */
-
+ 
       const videoTexture = new THREE.VideoTexture(video);
-
+ 
       videoTexture.colorSpace = THREE.SRGBColorSpace;
       videoTexture.center.set(0.5, 0.5);
       videoTexture.rotation =
         VIDEO_ROTATION_DEG * Math.PI / 180;
-
+ 
       /*
        * This is the original poster-sized AR overlay.
        * The video does NOT become full-screen.
        */
       const geometry =
         new THREE.PlaneGeometry(1, TARGET_ASPECT);
-
+ 
       const material =
         new THREE.MeshBasicMaterial({
           map: videoTexture,
@@ -294,84 +274,84 @@
           transparent: true,
           opacity: 0
         });
-
+ 
       const plane = new THREE.Mesh(
         geometry,
         material
       );
-
+ 
       plane.position.set(0, 0, 0.01);
       anchor.group.add(plane);
-
+ 
       /* ---------------- VIDEO CROPPING ---------------- */
-
+ 
       function fitVideoCover() {
         const rotated90 =
           Math.abs(VIDEO_ROTATION_DEG % 180) === 90;
-
+ 
         const w = video.videoWidth || 16;
         const h = video.videoHeight || 9;
-
+ 
         const displayAspect =
           (rotated90 ? h : w) /
           (rotated90 ? w : h);
-
+ 
         const planeAspect =
           1 / TARGET_ASPECT;
-
+ 
         let cropW = 1;
         let cropH = 1;
-
+ 
         if (displayAspect > planeAspect) {
           cropW = planeAspect / displayAspect;
         } else {
           cropH = displayAspect / planeAspect;
         }
-
+ 
         const rawCropW =
           rotated90 ? cropH : cropW;
-
+ 
         const rawCropH =
           rotated90 ? cropW : cropH;
-
+ 
         videoTexture.repeat.set(
           rawCropW,
           rawCropH
         );
-
+ 
         videoTexture.offset.set(
           (1 - rawCropW) / 2,
           (1 - rawCropH) / 2
         );
-
+ 
         videoTexture.needsUpdate = true;
       }
-
+ 
       video.addEventListener(
         "loadedmetadata",
         fitVideoCover
       );
-
+ 
       fitVideoCover();
-
+ 
       /* ---------------- AUDIO BUTTON ---------------- */
-
+ 
       let targetVisible = false;
       let soundOn = false;
-
+ 
       audioBtn.addEventListener("click", async (event) => {
         event.preventDefault();
         event.stopPropagation();
-
+ 
         if (!targetVisible) return;
-
+ 
         try {
           if (video.muted) {
             video.muted = false;
             video.volume = 1;
-
+ 
             await video.play();
-
+ 
             soundOn = true;
             audioBtn.textContent = "🔊";
             audioBtn.setAttribute(
@@ -381,7 +361,7 @@
           } else {
             video.muted = true;
             soundOn = false;
-
+ 
             audioBtn.textContent = "🔇";
             audioBtn.setAttribute(
               "aria-label",
@@ -393,27 +373,27 @@
             "Could not enable audio:",
             error
           );
-
+ 
           video.muted = true;
           soundOn = false;
           audioBtn.textContent = "🔇";
         }
       });
-
+ 
       /* ---------------- IMAGE DETECTION ---------------- */
-
+ 
       anchor.onTargetFound = () => {
         targetVisible = true;
-
+ 
         focusMessage.classList.add("hidden");
         audioBtn.classList.add("show");
-
+ 
         soundOn = false;
         video.muted = true;
         audioBtn.textContent = "🔇";
-
+ 
         video.currentTime = 0;
-
+ 
         video.play().catch(error => {
           console.error(
             "Muted autoplay failed:",
@@ -421,40 +401,42 @@
           );
         });
       };
-
+ 
       anchor.onTargetLost = () => {
         targetVisible = false;
-
+ 
         focusMessage.classList.remove("hidden");
         audioBtn.classList.remove("show");
-
+ 
         video.pause();
         video.muted = true;
-
+ 
         soundOn = false;
         audioBtn.textContent = "🔇";
       };
-
+ 
       /* ---------------- START CAMERA ---------------- */
-
-      await mindarThree.start();
-
+ 
+      try {
+        await mindarThree.start();
+      } catch (error) {
+        throw new Error(cameraError(error));
+      }
+ 
       renderer.setAnimationLoop(() => {
-        const targetOpacity =
-          targetVisible ? 1 : 0;
-
-        material.opacity +=
-          (targetOpacity - material.opacity) * 0.15;
-
+        // Video appears fully over the poster as soon as it's
+        // detected (no fade), and disappears instantly when lost.
+        material.opacity = targetVisible ? 1 : 0;
+ 
         renderer.render(
           scene,
           camera
         );
       });
-
+ 
     } catch (error) {
       console.error(error);
-
+ 
       showError(
         error && error.message
           ? error.message
@@ -462,7 +444,7 @@
       );
     }
   }
-
+ 
   /*
    * Automatically start.
    * No Start button and no scanner UI.
@@ -477,6 +459,7 @@
     startAR();
   }
 </script>
-
+ 
 </body>
 </html>
+ 
