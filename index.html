@@ -193,9 +193,13 @@
           uiScanning: false,
           uiLoading: false,
           filterMinCF: 0.0001,
-          filterBeta: 50,
-          warmupTolerance: 3,
-          missTolerance: 5,
+          filterBeta: 20,
+          warmupTolerance: 5,
+          // Much more forgiving before declaring the target "lost" — a
+          // shaky hand causes brief tracking drop-outs, and every one of
+          // those was flipping `visible` to false, which also silently
+          // blocked tap-to-unmute since taps were ignored while "lost".
+          missTolerance: 30,
         });
         const { renderer, scene, camera } = mindarThree;
         renderer.setPixelRatio(window.devicePixelRatio);
@@ -250,8 +254,8 @@
         let smoothingInitialized = false;
  
         // Lower = smoother/steadier but more lag. Higher = snappier but
-        // more shake. 0.25 is a good middle ground for a handheld phone.
-        const SMOOTHING = 0.25;
+        // more shake. Turned down further for a noticeably steadier look.
+        const SMOOTHING = 0.12;
  
         function updateStableGroup() {
           if (!visible) return;
@@ -269,12 +273,17 @@
           stableGroup.scale.copy(rawScale);
         }
  
-        // 🔊 Tap anywhere on screen (while the poster is visible) to
-        // toggle sound. Deliberately NOT limited to hitting the exact
-        // (moving, small) video plane — that made taps unreliable.
+        // 🔊 Tap anywhere on screen to toggle sound. Uses pointerdown
+        // (fires immediately and reliably on mobile touch, unlike click
+        // which can lag or misfire) and a short grace window so a tap
+        // that lands right as tracking blips doesn't get ignored.
+        let lastVisibleAt = 0;
         renderer.domElement.style.pointerEvents = 'auto';
-        renderer.domElement.addEventListener('click', () => {
-          if (!visible) return;
+        document.addEventListener('pointerdown', (event) => {
+          if (event.target && event.target.closest('#start-screen')) return;
+ 
+          const recentlyVisible = visible || (Date.now() - lastVisibleAt < 600);
+          if (!recentlyVisible) return;
  
           if (video.muted) {
             video.muted = false;
@@ -307,12 +316,23 @@
         anchor.onTargetFound = () => {
           visible = true;
           video.currentTime = 0;
-          video.play().catch((e) => console.error('video.play() failed:', e));
+ 
+          // Try to play WITH sound automatically. This works in most
+          // browsers because pressing "Start Scanning" earlier already
+          // counted as a real user gesture on this page. If the browser
+          // still blocks it (stricter mobile Safari behavior), we fall
+          // back to muted autoplay and the tap-to-toggle below still
+          // works to turn sound on manually.
+          video.muted = false;
+          video.volume = 1.0;
+          video.play().catch(() => {
+            video.muted = true;
+            video.play().catch((e) => console.error('video.play() failed:', e));
+          });
         };
         anchor.onTargetLost = () => {
           visible = false;
           video.pause();
-          video.muted = true; // reset so sound doesn't surprise-blast next find
           smoothingInitialized = false; // snap cleanly to the new pose next time
         };
  
@@ -326,6 +346,7 @@
           const target = visible ? 1 : 0;
           material.opacity += (target - material.opacity) * 0.15;
           updateStableGroup();
+          if (visible) lastVisibleAt = Date.now();
           renderer.render(scene, camera);
         });
  
