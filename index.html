@@ -233,15 +233,15 @@
         const plane = new THREE.Mesh(geometry, material);
         plane.position.set(0, 0, 0.01); // just in front of the marker, avoids z-fighting
  
-        // --- Stability layer ---
+        // --- Stability layer (adaptive) ---
         // MindAR's raw per-frame pose has natural jitter even when the
-        // camera is held still (this is a known limitation of the
-        // tracker itself, not fixable by config alone). Instead of
-        // parenting the plane directly to anchor.group (which snaps to
-        // the raw noisy pose every frame), we parent it to our own
-        // "stableGroup" and ease that group's transform toward the raw
-        // pose each frame. This trades a small amount of extra lag for
-        // a much steadier-looking video.
+        // camera is held still. Flat smoothing fixes that but makes real
+        // movement (zooming in/out, tilting, walking closer) feel laggy.
+        // So instead we measure how big the change is each frame:
+        //  - small change (a few pixels of hand-shake noise) -> smooth
+        //    it out heavily, video stays rock-steady.
+        //  - big change (you actually moved/tilted/zoomed) -> snap to it
+        //    almost immediately, video stays glued to the poster.
         const stableGroup = new THREE.Group();
         stableGroup.add(plane);
         scene.add(stableGroup);
@@ -251,26 +251,48 @@
         const rawScale = new THREE.Vector3();
         const smoothPos = new THREE.Vector3();
         const smoothQuat = new THREE.Quaternion();
+        const smoothScale = new THREE.Vector3();
         let smoothingInitialized = false;
  
-        // Lower = smoother/steadier but more lag. Higher = snappier but
-        // more shake. Turned down further for a noticeably steadier look.
-        const SMOOTHING = 0.12;
+        // Below these thresholds = treated as jitter -> heavy smoothing.
+        // Above = treated as real movement -> snap fast.
+        const JITTER_POS = 0.015;   // marker-space units
+        const JITTER_ANGLE = 0.04;  // radians (~2.3°)
+        const JITTER_SCALE = 0.02;  // fraction of current scale
+ 
+        const SLOW_FACTOR = 0.15; // smoothing for jitter (steadiness)
+        const FAST_FACTOR = 0.75; // smoothing for real movement (responsiveness)
  
         function updateStableGroup() {
           if (!visible) return;
           anchor.group.matrix.decompose(rawPos, rawQuat, rawScale);
+ 
           if (!smoothingInitialized) {
             smoothPos.copy(rawPos);
             smoothQuat.copy(rawQuat);
+            smoothScale.copy(rawScale);
             smoothingInitialized = true;
           } else {
-            smoothPos.lerp(rawPos, SMOOTHING);
-            smoothQuat.slerp(rawQuat, SMOOTHING);
+            const posDelta = smoothPos.distanceTo(rawPos);
+            const angleDelta = smoothQuat.angleTo(rawQuat);
+            const scaleDelta = Math.abs(smoothScale.x - rawScale.x) /
+              Math.max(smoothScale.x, 0.0001);
+ 
+            const isRealMovement =
+              posDelta > JITTER_POS ||
+              angleDelta > JITTER_ANGLE ||
+              scaleDelta > JITTER_SCALE;
+ 
+            const factor = isRealMovement ? FAST_FACTOR : SLOW_FACTOR;
+ 
+            smoothPos.lerp(rawPos, factor);
+            smoothQuat.slerp(rawQuat, factor);
+            smoothScale.lerp(rawScale, factor);
           }
+ 
           stableGroup.position.copy(smoothPos);
           stableGroup.quaternion.copy(smoothQuat);
-          stableGroup.scale.copy(rawScale);
+          stableGroup.scale.copy(smoothScale);
         }
  
         // 🔊 Tap anywhere on screen to toggle sound. Uses pointerdown
