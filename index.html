@@ -156,7 +156,10 @@
 
 <div id="error-message"></div>
 
-<script>
+<script type="module">
+  import * as THREE from "three";
+  import { MindARThree } from "mindar-image-three";
+
   const focusMessage = document.getElementById("focus-message");
   const audioBtn = document.getElementById("audio-btn");
   const errorMessage = document.getElementById("error-message");
