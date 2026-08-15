@@ -28,11 +28,15 @@
      level needs forcing full-bleed, not just video/canvas, or a letterboxed
      black bar shows up (known MindAR/iOS Safari quirk). */
   #ar-container {
-    position:fixed; inset:0; width:100%; height:100%;
-    overflow:hidden; background:#000;
-    /* small overscan: pushes any leftover letterbox margin off-screen */
-    transform: scale(1.2); transform-origin: center center;
+    position:fixed;
+    inset:0;
+    width:100%;
+    height:100%;
+    overflow:hidden;
+    background:#000;
   }
+
+  /* Let MindAR's camera feed fill the screen normally. */
   #ar-container > div {
     position:absolute !important;
     inset:0 !important;
@@ -40,30 +44,23 @@
     height:100% !important;
   }
 
-  /* Real camera preview */
   #ar-container video {
     position:absolute !important;
     inset:0 !important;
     width:100% !important;
     height:100% !important;
-    max-width:none !important;
-    max-height:none !important;
     object-fit:cover !important;
     z-index:0 !important;
-    display:block !important;
   }
 
-  /* AR graphics must sit on top of the camera, but stay transparent */
+  /* Transparent Three.js layer: only the detected poster/video is rendered here. */
   #ar-container canvas {
     position:absolute !important;
     inset:0 !important;
     width:100% !important;
     height:100% !important;
-    max-width:none !important;
-    max-height:none !important;
-    z-index:1 !important;
-    display:block !important;
     background:transparent !important;
+    z-index:1 !important;
   }
 
   #audio-btn {
@@ -107,6 +104,7 @@
     padding:0 16px 24px;
     pointer-events:none;
     background:transparent;
+    transition:opacity .25s ease;
   }
 
   #start-screen.hidden {
@@ -380,7 +378,7 @@
       }
     }
  
-    // Start camera automatically when the page is ready.
+    // Start the camera automatically.
     if (document.readyState === 'loading') {
       document.addEventListener('DOMContentLoaded', startExperience, { once: true });
     } else {
