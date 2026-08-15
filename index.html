@@ -228,32 +228,62 @@
         });
         const plane = new THREE.Mesh(geometry, material);
         plane.position.set(0, 0, 0.01); // just in front of the marker, avoids z-fighting
-        anchor.group.add(plane);
-        // 🔊 Tap the AR video to enable sound
-const raycaster = new THREE.Raycaster();
-const pointer = new THREE.Vector2();
  
-renderer.domElement.addEventListener('click', (event) => {
-  if (!visible) return;
+        // --- Stability layer ---
+        // MindAR's raw per-frame pose has natural jitter even when the
+        // camera is held still (this is a known limitation of the
+        // tracker itself, not fixable by config alone). Instead of
+        // parenting the plane directly to anchor.group (which snaps to
+        // the raw noisy pose every frame), we parent it to our own
+        // "stableGroup" and ease that group's transform toward the raw
+        // pose each frame. This trades a small amount of extra lag for
+        // a much steadier-looking video.
+        const stableGroup = new THREE.Group();
+        stableGroup.add(plane);
+        scene.add(stableGroup);
  
-  const rect = renderer.domElement.getBoundingClientRect();
+        const rawPos = new THREE.Vector3();
+        const rawQuat = new THREE.Quaternion();
+        const rawScale = new THREE.Vector3();
+        const smoothPos = new THREE.Vector3();
+        const smoothQuat = new THREE.Quaternion();
+        let smoothingInitialized = false;
  
-  pointer.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
-  pointer.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+        // Lower = smoother/steadier but more lag. Higher = snappier but
+        // more shake. 0.25 is a good middle ground for a handheld phone.
+        const SMOOTHING = 0.25;
  
-  raycaster.setFromCamera(pointer, camera);
+        function updateStableGroup() {
+          if (!visible) return;
+          anchor.group.matrix.decompose(rawPos, rawQuat, rawScale);
+          if (!smoothingInitialized) {
+            smoothPos.copy(rawPos);
+            smoothQuat.copy(rawQuat);
+            smoothingInitialized = true;
+          } else {
+            smoothPos.lerp(rawPos, SMOOTHING);
+            smoothQuat.slerp(rawQuat, SMOOTHING);
+          }
+          stableGroup.position.copy(smoothPos);
+          stableGroup.quaternion.copy(smoothQuat);
+          stableGroup.scale.copy(rawScale);
+        }
  
-  const intersects = raycaster.intersectObject(plane, true);
+        // 🔊 Tap anywhere on screen (while the poster is visible) to
+        // toggle sound. Deliberately NOT limited to hitting the exact
+        // (moving, small) video plane — that made taps unreliable.
+        renderer.domElement.style.pointerEvents = 'auto';
+        renderer.domElement.addEventListener('click', () => {
+          if (!visible) return;
  
-  if (intersects.length > 0) {
-    video.muted = false;
-    video.volume = 1.0;
- 
-    video.play().catch(err => {
-      console.log("Audio play failed:", err);
-    });
-  }
-});
+          if (video.muted) {
+            video.muted = false;
+            video.volume = 1.0;
+            video.play().catch(err => console.log('Audio play failed:', err));
+          } else {
+            video.muted = true;
+          }
+        });
  
         // Crop the video to fill the billboard exactly (like object-fit:
         // cover) instead of stretching or leaving letterbox gaps.
@@ -282,6 +312,8 @@ renderer.domElement.addEventListener('click', (event) => {
         anchor.onTargetLost = () => {
           visible = false;
           video.pause();
+          video.muted = true; // reset so sound doesn't surprise-blast next find
+          smoothingInitialized = false; // snap cleanly to the new pose next time
         };
  
         step('opening camera feed…');
@@ -293,6 +325,7 @@ renderer.domElement.addEventListener('click', (event) => {
         renderer.setAnimationLoop(() => {
           const target = visible ? 1 : 0;
           material.opacity += (target - material.opacity) * 0.15;
+          updateStableGroup();
           renderer.render(scene, camera);
         });
  
